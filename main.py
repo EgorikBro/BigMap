@@ -16,14 +16,15 @@ class BigMap:
         self.image = None
         self.lon, self.lat = get_toponym_coord(get_toponym(geocode('Переулок лучевой 3 миасс')))
         self.layer = 'map'
-        self.z = 10
+        self.z = 13
         self.point = None
         self.manager = pygame_gui.UIManager(SIZE)
         self.layers_select = (pygame_gui.elements.UIDropDownMenu(self.options, self.options[0],
                                                                  pygame.Rect(440, 10, 200, 30),
                                                                  self.manager))
-        self.search_field = pygame_gui.elements.UITextEntryLine(pygame.Rect(175, 420, 300, 30), self.manager)
+        self.search_field = pygame_gui.elements.UITextEntryLine(pygame.Rect(130, 410, 300, 30), self.manager)
         self.error_field = pygame_gui.elements.UILabel(pygame.Rect(100, 380, 450, 30), '', self.manager)
+        self.clear_btn = pygame_gui.elements.UIButton(pygame.Rect(430, 410, 100, 30), 'Сброс', self.manager)
         self.update_map()
 
     def update_map(self):
@@ -54,7 +55,7 @@ class BigMap:
                 self.lat = max(self.lat - 70 * 2 ** (-self.z), -89)
             if event.key == pygame.K_RETURN:
                 text = self.search_field.get_text()
-                if text:
+                if self.search_field.is_focused and text:
                     try:
                         self.lon, self.lat = get_toponym_coord(get_toponym(geocode(text)))
                         self.error_field.set_text('')
@@ -65,11 +66,20 @@ class BigMap:
                 self.update_map()
         self.manager.process_events(event)
 
+    def clear_search(self):
+        self.point = None
+        self.search_field.set_text('')
+        self.search_field.focus()
+        self.update_map()
+
     def gui_event_handler(self, event):
         if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
             if event.ui_element == self.layers_select:
                 self.layer = event.text
                 self.update_map()
+        if event.type == pygame_gui.UI_BUTTON_PRESSED:
+            if event.ui_element == self.clear_btn:
+                self.clear_search()
 
     def draw(self, surf):
         surf.blit(self.image, (0, 0))
