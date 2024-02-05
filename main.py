@@ -1,41 +1,29 @@
-import os
-import sys
 from io import BytesIO
-
-import pygame
 import pygame_gui
 
+import pygame
 from api_library import *
 
 
-def load_image(name, colorkey=None):
-    fullname = os.path.join('data', name)
-    if not os.path.isfile(fullname):
-        print(f"Файл с изображением '{fullname}' не найден")
-        sys.exit()
-    image = pygame.image.load(fullname)
-    if colorkey is not None:
-        image = image.convert()
-        if colorkey == -1:
-            colorkey = image.get_at((0, 0))
-        image.set_colorkey(colorkey)
-    else:
-        image = image.convert_alpha()
-    return image
+KEYS = (pygame.K_PAGEUP, pygame.K_PAGEDOWN, pygame.K_LEFT, pygame.K_RIGHT,
+        pygame.K_UP, pygame.K_DOWN, pygame.K_RETURN)
 
 
 class BigMap:
-    options = ['map', 'sat', 'sat,skl']
+    options = ['map', 'sat', 'map,skl']
 
     def __init__(self):
         self.image = None
-        self.lon, self.lat = 60.153191, 55.156353
+        self.lon, self.lat = get_toponym_coord(get_toponym(geocode('Переулок лучевой 3 миасс')))
         self.layer = 'map'
-        self.z = 15
+        self.z = 10
+        self.point = None
         self.manager = pygame_gui.UIManager(SIZE)
-        self.layers_select = (pygame_gui.elements.
-                              UIDropDownMenu(self.options, self.options[0],
-                                             pygame.Rect(10, 10, 200, 30), self.manager))
+        self.layers_select = (pygame_gui.elements.UIDropDownMenu(self.options, self.options[0],
+                                                                 pygame.Rect(440, 10, 200, 30),
+                                                                 self.manager))
+        self.search_field = pygame_gui.elements.UITextEntryLine(pygame.Rect(175, 420, 300, 30), self.manager)
+        self.error_field = pygame_gui.elements.UILabel(pygame.Rect(100, 380, 450, 30), '', self.manager)
         self.update_map()
 
     def update_map(self):
@@ -43,8 +31,10 @@ class BigMap:
             "ll": ",".join(map(str, (self.lon, self.lat))),
             'z': self.z,
             "l": self.layer,
-            'size': '650,450'
+            'size': '650,450',
         }
+        if self.point is not None:
+            map_params["pt"] = ','.join(map(str, self.point)) + ',flag'
         image = BytesIO(get_static(**map_params))
         self.image = pygame.image.load(image)
 
@@ -59,10 +49,20 @@ class BigMap:
             if event.key == pygame.K_RIGHT:
                 self.lon = (self.lon + 180 + 200 * 2 ** (-self.z)) % 360 - 180
             if event.key == pygame.K_UP:
-                self.lat = min(self.lat + 70 * 2 ** (-self.z), 88)
+                self.lat = min(self.lat + 70 * 2 ** (-self.z), 89)
             if event.key == pygame.K_DOWN:
-                self.lat = max(self.lat - 70 * 2 ** (-self.z), -88)
-            self.update_map()
+                self.lat = max(self.lat - 70 * 2 ** (-self.z), -89)
+            if event.key == pygame.K_RETURN:
+                text = self.search_field.get_text()
+                if text:
+                    try:
+                        self.lon, self.lat = get_toponym_coord(get_toponym(geocode(text)))
+                        self.error_field.set_text('')
+                        self.point = self.lon, self.lat
+                    except IndexError as e:
+                        self.error_field.set_text('Ничего не найдено')
+            if event.key in KEYS:
+                self.update_map()
         self.manager.process_events(event)
 
     def gui_event_handler(self, event):
@@ -79,22 +79,28 @@ class BigMap:
         self.manager.update(delta)
 
 
-if __name__ == '__main__':
-    pygame.init()
-    SIZE = W, H = 650, 450
-    screen = pygame.display.set_mode(SIZE)
-    app = BigMap()
+pygame.init()
+SIZE = WIDTH, HEIGHT = 650, 450
+screen = pygame.display.set_mode(SIZE)
+clock = pygame.time.Clock()
 
-    clock = pygame.time.Clock()
-    running = True
-    while running:
-        time_delta = clock.tick(60) / 1000.0
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            app.event_handler(event)
-            app.gui_event_handler(event)
-        app.update_gui(time_delta)
-        screen.fill('black')
-        app.draw(screen)
-        pygame.display.flip()
+all_sprites = pygame.sprite.Group()
+tiles_group = pygame.sprite.Group()
+player_group = pygame.sprite.Group()
+
+app = BigMap()
+
+running = True
+
+while running:
+    time_delta = clock.tick(60) / 1000.0
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        app.event_handler(event)
+        app.gui_event_handler(event)
+    app.update_gui(time_delta)
+    screen.fill('black')
+    app.draw(screen)
+    pygame.display.flip()
+pygame.quit()
